@@ -15,10 +15,11 @@ repositories {
 dependencies {
     testImplementation 'io.cucumber:cucumber-java:7.2.3'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
+    testImplementation 'org.apache.commons:commons-lang3:3.12.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter:5.8.2'
 }
 
-task cucumber(type: JavaExec) {
+tasks.register('cucumber', JavaExec) {
     dependsOn assemble, testClasses
     mainClass = "com.tomgregory.cucumber.CucumberLauncher"
     classpath = configurations.cucumberRuntime + sourceSets.main.output + sourceSets.test.output
@@ -29,4 +30,27 @@ task cucumber(type: JavaExec) {
             '--dir0', 'src/test/resources/features1',
             '--dir1', 'src/test/resources/features2'
     ]
+}
+
+tasks.register('runCucumber', JavaExec) {
+    dependsOn cleanReports, testClasses
+    mainClass = "com.tomgregory.cucumber.RunCucumber"
+    classpath = configurations.cucumberRuntime + sourceSets.main.output + sourceSets.test.output
+    (1..10).parallelStream().forEach(i -> {
+        systemProperty "tags$i", findProperty("tags$i")
+        systemProperty "threads$i", findProperty("threads$i")
+    })
+    args = [
+            '--glue', 'com.tomgregory.cucumber', 'src/test/resources',
+            '--plugin', 'pretty',
+            '--plugin', "runtimeHtml",
+            '--plugin', "runtimeRerun",
+            '--plugin', "runtimeJson",
+            '--threads', "runtimeThreads",
+            '--tags', "runtimeTag"
+    ]
+}
+
+tasks.register('cleanReports', Delete) {
+    delete 'build/GridReports'
 }
