@@ -16,6 +16,7 @@ dependencies {
     testImplementation 'io.cucumber:cucumber-java:7.2.3'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.2'
     testImplementation 'org.apache.commons:commons-lang3:3.12.0'
+    testImplementation 'net.masterthought:cucumber-reporting:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter:5.8.2'
 }
 
