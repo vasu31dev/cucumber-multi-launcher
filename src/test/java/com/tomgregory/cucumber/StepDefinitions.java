@@ -12,8 +12,9 @@ public class StepDefinitions {
     private Account account;
 
     @Given("account balance is {double}")
-    public void givenAccountBalance(Double initialBalance) {
+    public void givenAccountBalance(Double initialBalance) throws InterruptedException {
         account = new Account(initialBalance);
+        Thread.sleep(5000);
     }
 
     @When("the account is credited with {double}")
