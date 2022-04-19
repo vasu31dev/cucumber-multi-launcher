@@ -41,6 +41,8 @@ tasks.register('runCucumber', JavaExec) {
         systemProperty "tags$i", findProperty("tags$i")
         systemProperty "threads$i", findProperty("threads$i")
     })
+//    systemProperty "CUCUMBER_PUBLISH_ENABLED", true
+    systemProperty "cucumber.publish.quiet", true
     args = [
             '--glue', 'com.tomgregory.cucumber', 'src/test/resources',
             '--plugin', 'pretty',
@@ -54,4 +56,44 @@ tasks.register('runCucumber', JavaExec) {
 
 tasks.register('cleanReports', Delete) {
     delete 'build/GridReports'
+}
+
+tasks.register('rerunCucumber', JavaExec) {
+    dependsOn cleanRerunReports, testClasses
+    mainClass = "com.tomgregory.cucumber.RunCucumber"
+    classpath = configurations.cucumberRuntime + sourceSets.main.output + sourceSets.test.output
+    (1..10).parallelStream().forEach(i -> {
+        systemProperty "threads$i", findProperty("threads$i")
+    })
+    systemProperty "rerun", true
+//    systemProperty "CUCUMBER_PUBLISH_ENABLED", true
+    systemProperty "cucumber.publish.quiet", true
+    args = [
+            '--plugin', 'pretty',
+            '--plugin', "runtimeHtml",
+            '--plugin', "runtimeRerun",
+            '--plugin', "runtimeJson",
+            '--threads', "runtimeThreads",
+            '--glue', 'com.tomgregory.cucumber', 'runtimeFeatures'
+    ]
+}
+
+//delete recursively all the files and directories in GridReports except for rerun.txt files which are not empty
+tasks.register('cleanRerunReports') {
+    def reportDir = fileTree("build/GridReports")
+    delete reportDir.matching {
+        exclude '**/rerun.txt'
+    }
+    reportDir.forEach((txt) -> {
+        if (txt.length() == 0)
+            delete txt.getParent()
+    })
+
+    reportDir.visit { def fileVisitDetails ->
+        def file = fileVisitDetails.file
+        if (file.isDirectory() && (file.list().length == 0)) {
+            file.delete()
+        }
+    }
+
 }

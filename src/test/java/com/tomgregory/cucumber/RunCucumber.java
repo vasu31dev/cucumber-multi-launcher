@@ -20,9 +20,14 @@ import java.util.concurrent.Future;
 public class RunCucumber {
 
   private final static String REPORTS_PATH = "build/GridReports";
+  private final static int MAX_THREAD_COUNT = 10;
 
   public static void main(String[] args) throws ExecutionException, InterruptedException {
     List<List<String>> allExecutionArguments = getArguments(List.of(args));
+    System.out.println("allExecutionArguments-"+allExecutionArguments);
+    if (allExecutionArguments.isEmpty()) {
+      throw new IllegalArgumentException("No matching scenarios were found to run Execution");
+    }
     ExecutorService executorService = Executors.newFixedThreadPool(10);
     List<Future<Byte>> futures = allExecutionArguments.stream().map(theseArgs -> executorService.submit(() -> {
       System.out.println("Starting CucumberLauncher execution");
@@ -46,15 +51,30 @@ public class RunCucumber {
   private static List<List<String>> getArguments(List<String> args) {
     List<String> argsCopy = new ArrayList<>(args);
     List<List<String>> allExecutionArguments = new ArrayList<>();
-    for (int i = 1; i<=10; i++) {
-      if (!StringUtils.isBlank(System.getProperty("tags"+i))) {
-        argsCopy.set(args.indexOf("runtimeTag"), System.getProperty("tags"+i));
-        int threadCount = StringUtils.isBlank(System.getProperty("threads"+i)) ? 1 : Integer.parseInt(System.getProperty("threads"+i));
-        argsCopy.set(args.indexOf("runtimeThreads"), String.valueOf(threadCount));
-        argsCopy.set(args.indexOf("runtimeHtml"), "html:%s/Reports%s/cucumber-report.html".formatted(REPORTS_PATH, i));
-        argsCopy.set(args.indexOf("runtimeRerun"), "rerun:%s/Reports%s/rerun.txt".formatted(REPORTS_PATH, i));
-        argsCopy.set(args.indexOf("runtimeJson"), "json:%s/Reports%s/jsonReport.json".formatted(REPORTS_PATH, i));
-        allExecutionArguments.add(new ArrayList<>(argsCopy));
+    boolean rerunFlag = Boolean.parseBoolean(System.getProperty("rerun"));
+    if (rerunFlag) {
+      for (int i = 1; i<=MAX_THREAD_COUNT; i++) {
+        if (new File("%s/Reports%s/rerun.txt".formatted(REPORTS_PATH, i)).exists()) {
+          argsCopy.set(args.indexOf("runtimeFeatures"), "@%s/Reports%s/rerun.txt".formatted(REPORTS_PATH, i));
+          argsCopy.set(args.indexOf("runtimeHtml"), "html:%s/Reports%s/cucumber-report.html".formatted(REPORTS_PATH, i));
+          argsCopy.set(args.indexOf("runtimeRerun"), "rerun:%s/Reports%s/rerun.txt".formatted(REPORTS_PATH, i));
+          argsCopy.set(args.indexOf("runtimeJson"), "json:%s/Reports%s/jsonReport.json".formatted(REPORTS_PATH, i));
+          int threadCount = StringUtils.isBlank(System.getProperty("threads"+i)) ? 1 : Integer.parseInt(System.getProperty("threads"+i));
+          argsCopy.set(args.indexOf("runtimeThreads"), String.valueOf(threadCount));
+          allExecutionArguments.add(new ArrayList<>(argsCopy));
+        }
+      }
+    } else {
+      for (int i = 1; i<=MAX_THREAD_COUNT; i++) {
+        if (!StringUtils.isBlank(System.getProperty("tags"+i))) {
+          argsCopy.set(args.indexOf("runtimeTag"), System.getProperty("tags"+i));
+          argsCopy.set(args.indexOf("runtimeHtml"), "html:%s/Reports%s/cucumber-report.html".formatted(REPORTS_PATH, i));
+          argsCopy.set(args.indexOf("runtimeRerun"), "rerun:%s/Reports%s/rerun.txt".formatted(REPORTS_PATH, i));
+          argsCopy.set(args.indexOf("runtimeJson"), "json:%s/Reports%s/jsonReport.json".formatted(REPORTS_PATH, i));
+          int threadCount = StringUtils.isBlank(System.getProperty("threads"+i)) ? 1 : Integer.parseInt(System.getProperty("threads"+i));
+          argsCopy.set(args.indexOf("runtimeThreads"), String.valueOf(threadCount));
+          allExecutionArguments.add(new ArrayList<>(argsCopy));
+        }
       }
     }
     return allExecutionArguments;
@@ -64,31 +84,30 @@ public class RunCucumber {
 
     public void mergeReports() {
       {
-        try {
-          File reportOutputDirectory = new File(REPORTS_PATH);
-          List<String> jsonFiles = new ArrayList<>();
-          List<File> files = (List<File>) FileUtils.listFiles(reportOutputDirectory,
-                  new String[]{"json"}, true);
-          for (File file : files) {
-            jsonFiles.add(file.getCanonicalPath());
+        File jsonReportsDirectory = new File(REPORTS_PATH);
+        if (jsonReportsDirectory.exists()) {
+          try {
+            List<String> jsonFiles = new ArrayList<>();
+            List<File> files = (List<File>) FileUtils.listFiles(jsonReportsDirectory, new String[]{"json"}, true);
+            for (File file : files) {
+              jsonFiles.add(file.getCanonicalPath());
+            }
+
+            String buildNumber = "1";
+            String projectName = "Cucumber";
+            Configuration configuration = new Configuration(jsonReportsDirectory, projectName);
+            configuration.setBuildNumber(buildNumber);
+
+            configuration.addClassifications("Browser", "Chrome");
+            configuration.addClassifications("Branch", "master");
+            configuration.setSortingMethod(SortingMethod.NATURAL);
+            configuration.addPresentationModes(PresentationMode.EXPAND_ALL_STEPS);
+            configuration.setTrendsStatsFile(new File(REPORTS_PATH+"/jenkins.json"));
+            ReportBuilder reportBuilder = new ReportBuilder(jsonFiles, configuration);
+            reportBuilder.generateReports();
+          } catch (IOException e) {
+            e.printStackTrace();
           }
-
-          String buildNumber = "1";
-          String projectName = "Cucumber";
-          Configuration configuration = new Configuration(reportOutputDirectory, projectName);
-          configuration.setBuildNumber(buildNumber);
-
-          configuration.addClassifications("Browser", "Chrome");
-          configuration.addClassifications("Branch", "master");
-          configuration.setSortingMethod(SortingMethod.NATURAL);
-          configuration.addPresentationModes(PresentationMode.EXPAND_ALL_STEPS);
-//							Files.createDirectories(Paths.get(projectPath + localReportsFolderName + "/JenkinsReport"));
-          configuration.setTrendsStatsFile(new File(REPORTS_PATH+"/jenkins.json"));
-          ReportBuilder reportBuilder = new ReportBuilder(jsonFiles, configuration);
-          reportBuilder.generateReports();
-          System.out.println("Local Jenkins Reports Generated");
-        } catch (IOException e) {
-          e.printStackTrace();
         }
       }
 
